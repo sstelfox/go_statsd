@@ -11,7 +11,6 @@ import (
   "os"
   "os/signal"
   "regexp"
-  "runtime"
   "sort"
   "strconv"
   "strings"
@@ -21,11 +20,11 @@ import (
 
 const (
   VERSION                 = "0.5.2-alpha"
-  MAX_UNPROCESSED_PACKETS = 1000
-  MAX_UDP_PACKET_SIZE     = 512
+  MAX_UNPROCESSED_PACKETS = 2048
+  MAX_UDP_PACKET_SIZE     = 784
 )
 
-var signalchan chan os.Signal
+var signalChannel chan os.Signal
 
 type Packet struct {
   Bucket   string
@@ -54,9 +53,11 @@ func (a *Percentiles) Set(s string) error {
   *a = append(*a, &Percentile{f, strings.Replace(s, ".", "_", -1)})
   return nil
 }
+
 func (p *Percentile) String() string {
   return p.str
 }
+
 func (a *Percentiles) String() string {
   return fmt.Sprintf("%v", *a)
 }
@@ -88,7 +89,7 @@ func monitor() {
   ticker := time.NewTicker(period)
   for {
     select {
-    case sig := <-signalchan:
+    case sig := <-signalChannel:
       fmt.Printf("!! Caught signal %d... shutting down\n", sig)
       if err := submit(time.Now().Add(period)); err != nil {
         log.Printf("ERROR: %s", err)
@@ -351,14 +352,17 @@ func main() {
   flag.Parse()
 
   if *showVersion {
-    fmt.Printf("statsdaemon v%s (built w/%s)\n", VERSION, runtime.Version())
+    fmt.Printf("Go Statsd v%s\n", VERSION)
     return
   }
 
-  signalchan = make(chan os.Signal, 1)
-  signal.Notify(signalchan, syscall.SIGTERM)
+  signalChannel = make(chan os.Signal, 1)
+  signal.Notify(signalChannel, syscall.SIGTERM)
+  signal.Notify(signalChannel, syscall.SIGINT)
+
   *persistCountKeys = -1 * (*persistCountKeys)
 
   go udpListener()
   monitor()
 }
+
