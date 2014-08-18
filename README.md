@@ -1,26 +1,28 @@
-statsdaemon
-==========
+# go_statsd
 
-Port of Etsy's statsd (https://github.com/etsy/statsd), written in Go (originally based 
-on [amir/gographite](https://github.com/amir/gographite)).
+Clean-up and feature complete port (minus various backends) of [Etsy's
+statsd][1] written in Go. This is a fork of [Bitly's Implementation][2] which
+is in turn a fork of another repo [amir/gographite][3].
 
-Supports
+Supports:
 
-* Timing (with optional percentiles)
-* Counters (with optional sampling)
+* Timing
+* Counters
 * Gauges
 
-[![Build Status](https://secure.travis-ci.org/bitly/statsdaemon.png)](http://travis-ci.org/bitly/statsdaemon)
-
-Installing
-==========
+# Installing
 
 ```bash
-go get github.com/bitly/statsdaemon
+go get github.com/sstelfox/go_statsd
 ```
 
-Command Line Options
-====================
+# Change Log
+
+0.5.2-alpha:
+
+* Last version forked from bitly's repository (Forked on 2014-08-18)
+
+# Command Line Options
 
 ```
 Usage of ./statsdaemon:
@@ -33,3 +35,7 @@ Usage of ./statsdaemon:
   -receive-counter="": Metric name for total metrics recevied per interval
   -version=false: print version string
 ```
+
+[1]: https://github.com/etsy/statsd
+[2]: https://github.com/bitly/statsdaemon
+[3]: https://github.com/amir/gographite
