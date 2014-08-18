@@ -18,6 +18,10 @@ go get github.com/sstelfox/go_statsd
 
 # Change Log
 
+0.5.5-alpha:
+
+* Primarily code clean up, white space corrections, and more accurate variable names
+
 0.5.2-alpha:
 
 * Last version forked from bitly's repository (Forked on 2014-08-18)
