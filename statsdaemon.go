@@ -26,7 +26,7 @@ const (
 
 var signalChannel chan os.Signal
 
-type Packet struct {
+type StatSample struct {
   Bucket   string
   Value    interface{}
   Modifier string
@@ -34,7 +34,6 @@ type Packet struct {
 }
 
 type Uint64Slice []uint64
-
 func (s Uint64Slice) Len() int           { return len(s) }
 func (s Uint64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s Uint64Slice) Less(i, j int) bool { return s[i] < s[j] }
@@ -78,7 +77,7 @@ func init() {
 }
 
 var (
-  In       = make(chan *Packet, MAX_UNPROCESSED_PACKETS)
+  StatPipe = make(chan *StatSample, MAX_UNPROCESSED_PACKETS)
   counters = make(map[string]int64)
   gauges   = make(map[string]uint64)
   timers   = make(map[string]Uint64Slice)
@@ -90,7 +89,7 @@ func monitor() {
   for {
     select {
     case sig := <-signalChannel:
-      fmt.Printf("!! Caught signal %d... shutting down\n", sig)
+      log.Printf("!! Caught signal %d... shutting down\n", sig)
       if err := submit(time.Now().Add(period)); err != nil {
         log.Printf("ERROR: %s", err)
       }
@@ -99,7 +98,7 @@ func monitor() {
       if err := submit(time.Now().Add(period)); err != nil {
         log.Printf("ERROR: %s", err)
       }
-    case s := <-In:
+    case s := <-StatPipe:
       if (*receiveCounter != "") {
         v, ok := counters[*receiveCounter]
         if !ok || v < 0 {
@@ -279,8 +278,8 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 
 var packetRegexp = regexp.MustCompile("^([^:]+):(-?[0-9]+)\\|(g|c|ms)(\\|@([0-9\\.]+))?\n?$")
 
-func parseMessage(data []byte) []*Packet {
-  var output []*Packet
+func parseMessage(data []byte) []*StatSample {
+  var output []*StatSample
   for _, line := range bytes.Split(data, []byte("\n")) {
     if len(line) == 0 {
       continue
@@ -314,14 +313,15 @@ func parseMessage(data []byte) []*Packet {
       sampleRate = 1
     }
 
-    packet := &Packet{
+    stat := &StatSample{
       Bucket:   string(item[1]),
       Value:    value,
       Modifier: modifier,
       Sampling: float32(sampleRate),
     }
-    output = append(output, packet)
+    output = append(output, stat)
   }
+
   return output
 }
 
@@ -343,7 +343,7 @@ func udpListener() {
     }
 
     for _, p := range parseMessage(message[:n]) {
-      In <- p
+      StatPipe <- p
     }
   }
 }
