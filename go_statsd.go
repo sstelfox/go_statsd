@@ -1,3 +1,4 @@
+
 package main
 
 import (
@@ -19,7 +20,7 @@ import (
 )
 
 const (
-  VERSION                 = "0.5.2-alpha"
+  VERSION                 = "0.5.5-alpha"
   MAX_UNPROCESSED_PACKETS = 2048
   MAX_UDP_PACKET_SIZE     = 784
 )
@@ -30,7 +31,7 @@ type StatSample struct {
   Bucket   string
   Value    interface{}
   Modifier string
-  Sampling float32
+  SampleRate float32
 }
 
 type Uint64Slice []uint64
@@ -38,27 +39,26 @@ func (s Uint64Slice) Len() int           { return len(s) }
 func (s Uint64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s Uint64Slice) Less(i, j int) bool { return s[i] < s[j] }
 
-type Percentiles []*Percentile
 type Percentile struct {
   float float64
   str   string
 }
 
+func (p *Percentile) String() string { return p.str }
+
+type Percentiles []*Percentile
+
+func (a *Percentiles) String() string { return fmt.Sprintf("%v", *a) }
 func (a *Percentiles) Set(s string) error {
   f, err := strconv.ParseFloat(s, 64)
+
   if err != nil {
     return err
   }
+
   *a = append(*a, &Percentile{f, strings.Replace(s, ".", "_", -1)})
+
   return nil
-}
-
-func (p *Percentile) String() string {
-  return p.str
-}
-
-func (a *Percentiles) String() string {
-  return fmt.Sprintf("%v", *a)
 }
 
 var (
@@ -121,7 +121,7 @@ func monitor() {
         if !ok || v < 0 {
           counters[s.Bucket] = 0
         }
-        counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.Sampling))
+        counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.SampleRate))
       }
     }
   }
@@ -317,7 +317,7 @@ func parseMessage(data []byte) []*StatSample {
       Bucket:   string(item[1]),
       Value:    value,
       Modifier: modifier,
-      Sampling: float32(sampleRate),
+      SampleRate: float32(sampleRate),
     }
     output = append(output, stat)
   }
