@@ -83,7 +83,7 @@ var (
   timers   = make(map[string]Uint64Slice)
 )
 
-func monitor() {
+func startCollector() {
   period := time.Duration(*flushInterval) * time.Second
   ticker := time.NewTicker(period)
   for {
@@ -205,14 +205,17 @@ func processCounters(buffer *bytes.Buffer, now int64) int64 {
 
 func processGauges(buffer *bytes.Buffer, now int64) int64 {
   var num int64
+
   for g, c := range gauges {
     if c == math.MaxUint64 {
       continue
     }
+
     fmt.Fprintf(buffer, "%s %d %d\n", g, c, now)
     gauges[g] = math.MaxUint64
     num++
   }
+
   return num
 }
 
@@ -280,6 +283,7 @@ var packetRegexp = regexp.MustCompile("^([^:]+):(-?[0-9]+)\\|(g|c|ms)(\\|@([0-9\
 
 func parseMessage(data []byte) []*StatSample {
   var output []*StatSample
+
   for _, line := range bytes.Split(data, []byte("\n")) {
     if len(line) == 0 {
       continue
@@ -325,9 +329,11 @@ func parseMessage(data []byte) []*StatSample {
   return output
 }
 
-func udpListener() {
+func startStatListener() {
   address, _ := net.ResolveUDPAddr("udp", *serviceAddress)
+
   log.Printf("listening on %s", address)
+
   listener, err := net.ListenUDP("udp", address)
   if err != nil {
     log.Fatalf("ERROR: ListenUDP - %s", err)
@@ -335,8 +341,10 @@ func udpListener() {
   defer listener.Close()
 
   message := make([]byte, MAX_UDP_PACKET_SIZE)
+
   for {
     n, remaddr, err := listener.ReadFromUDP(message)
+
     if err != nil {
       log.Printf("ERROR: reading UDP packet from %+v - %s", remaddr, err)
       continue
@@ -348,8 +356,12 @@ func udpListener() {
   }
 }
 
-func main() {
+func parseCLI() {
   flag.Parse()
+}
+
+func main() {
+  parseCLI()
 
   if *showVersion {
     fmt.Printf("Go Statsd v%s\n", VERSION)
@@ -362,7 +374,7 @@ func main() {
 
   *persistCountKeys = -1 * (*persistCountKeys)
 
-  go udpListener()
-  monitor()
+  go startStatListener()
+  startCollector()
 }
 
