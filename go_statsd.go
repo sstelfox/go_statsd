@@ -62,19 +62,15 @@ func (a *Percentiles) Set(s string) error {
 }
 
 var (
-  serviceAddress   = flag.String("address", ":8125", "UDP service address")
-  graphiteAddress  = flag.String("graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
-  flushInterval    = flag.Int64("flush-interval", 10, "Flush interval (seconds)")
-  debug            = flag.Bool("debug", false, "print statistics sent to graphite")
-  showVersion      = flag.Bool("version", false, "print version string")
-  persistCountKeys = flag.Int64("persist-count-keys", 60, "number of flush-interval's to persist count keys")
-  receiveCounter  = flag.String("receive-counter", "", "Metric name for total metrics recevied per interval")
+  debug bool
+  flushInterval int64
+  graphiteAddress string
   percentThreshold = Percentiles{}
+  persistCountKeys int64
+  receiveCounter string
+  serviceAddress string
+  showVersion bool
 )
-
-func init() {
-  flag.Var(&percentThreshold, "percent-threshold", "Threshold percent (0-100, may be given multiple times)")
-}
 
 var (
   StatPipe = make(chan *StatSample, MAX_UNPROCESSED_PACKETS)
@@ -84,7 +80,7 @@ var (
 )
 
 func startCollector() {
-  period := time.Duration(*flushInterval) * time.Second
+  period := time.Duration(flushInterval) * time.Second
   ticker := time.NewTicker(period)
   for {
     select {
@@ -99,12 +95,12 @@ func startCollector() {
         log.Printf("ERROR: %s", err)
       }
     case s := <-StatPipe:
-      if (*receiveCounter != "") {
-        v, ok := counters[*receiveCounter]
+      if (receiveCounter != "") {
+        v, ok := counters[receiveCounter]
         if !ok || v < 0 {
-          counters[*receiveCounter] = 0
+          counters[receiveCounter] = 0
         }
-        counters[*receiveCounter] += 1
+        counters[receiveCounter] += 1
       }
 
       if s.Modifier == "ms" {
@@ -133,15 +129,15 @@ func submit(deadline time.Time) error {
 
   now := time.Now().Unix()
 
-  client, err := net.Dial("tcp", *graphiteAddress)
+  client, err := net.Dial("tcp", graphiteAddress)
   if err != nil {
-    if *debug {
+    if debug {
       log.Printf("WARNING: resetting counters when in debug mode")
       processCounters(&buffer, now)
       processGauges(&buffer, now)
       processTimers(&buffer, now, percentThreshold)
     }
-    errmsg := fmt.Sprintf("dialing %s failed - %s", *graphiteAddress, err)
+    errmsg := fmt.Sprintf("dialing %s failed - %s", graphiteAddress, err)
     return errors.New(errmsg)
   }
   defer client.Close()
@@ -159,7 +155,7 @@ func submit(deadline time.Time) error {
     return nil
   }
 
-  if *debug {
+  if debug {
     for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
       if len(line) == 0 {
         continue
@@ -174,7 +170,7 @@ func submit(deadline time.Time) error {
     return errors.New(errmsg)
   }
 
-  log.Printf("sent %d stats to %s", num, *graphiteAddress)
+  log.Printf("sent %d stats to %s", num, graphiteAddress)
 
   return nil
 }
@@ -187,7 +183,7 @@ func processCounters(buffer *bytes.Buffer, now int64) int64 {
   // for more context see https://github.com/bitly/statsdaemon/pull/8
   for s, c := range counters {
     switch {
-    case c <= *persistCountKeys:
+    case c <= persistCountKeys:
       // consider this purgable
       delete(counters, s)
       continue
@@ -330,7 +326,7 @@ func parseMessage(data []byte) []*StatSample {
 }
 
 func startStatListener() {
-  address, _ := net.ResolveUDPAddr("udp", *serviceAddress)
+  address, _ := net.ResolveUDPAddr("udp", serviceAddress)
 
   log.Printf("listening on %s", address)
 
@@ -357,13 +353,25 @@ func startStatListener() {
 }
 
 func parseCLI() {
+  flag.StringVar(&serviceAddress, "address", ":8125", "UDP service address")
+  flag.StringVar(&graphiteAddress, "graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
+  flag.Int64Var(&flushInterval, "flush-interval", 10, "Flush interval (seconds)")
+  flag.BoolVar(&debug, "debug", false, "print statistics sent to graphite")
+  flag.BoolVar(&showVersion, "version", false, "print version string")
+  flag.Int64Var(&persistCountKeys, "persist-count-keys", 60, "number of flush-interval's to persist count keys")
+  flag.StringVar(&receiveCounter, "receive-counter", "", "Metric name for total metrics recevied per interval")
+
+  percentThreshold = Percentiles{}
+
+  flag.Var(&percentThreshold, "percent-threshold", "Threshold percent (0-100, may be given multiple times)")
+
   flag.Parse()
 }
 
 func main() {
   parseCLI()
 
-  if *showVersion {
+  if (showVersion) {
     fmt.Printf("Go Statsd v%s\n", VERSION)
     return
   }
@@ -372,7 +380,7 @@ func main() {
   signal.Notify(signalChannel, syscall.SIGTERM)
   signal.Notify(signalChannel, syscall.SIGINT)
 
-  *persistCountKeys = -1 * (*persistCountKeys)
+  persistCountKeys = -1 * (persistCountKeys)
 
   go startStatListener()
   startCollector()
