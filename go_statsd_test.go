@@ -19,7 +19,7 @@ var commonPercentiles = Percentiles{
 
 func TestPacketParse(t *testing.T) {
   d := []byte("gaugor:333|g")
-  packets := parseMessage(d)
+  packets := parseMessages(d)
   assert.Equal(t, len(packets), 1)
   packet := packets[0]
   assert.Equal(t, "gaugor", packet.Bucket)
@@ -28,7 +28,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("gorets:2|c|@0.1")
-  packets = parseMessage(d)
+  packets = parseMessages(d)
   assert.Equal(t, len(packets), 1)
   packet = packets[0]
   assert.Equal(t, "gorets", packet.Bucket)
@@ -37,7 +37,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, float32(0.1), packet.SampleRate)
 
   d = []byte("gorets:4|c")
-  packets = parseMessage(d)
+  packets = parseMessages(d)
   assert.Equal(t, len(packets), 1)
   packet = packets[0]
   assert.Equal(t, "gorets", packet.Bucket)
@@ -46,7 +46,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("gorets:-4|c")
-  packets = parseMessage(d)
+  packets = parseMessages(d)
   assert.Equal(t, len(packets), 1)
   packet = packets[0]
   assert.Equal(t, "gorets", packet.Bucket)
@@ -55,7 +55,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("glork:320|ms")
-  packets = parseMessage(d)
+  packets = parseMessages(d)
   assert.Equal(t, len(packets), 1)
   packet = packets[0]
   assert.Equal(t, "glork", packet.Bucket)
@@ -64,7 +64,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("a.key.with-0.dash:4|c")
-  packets = parseMessage(d)
+  packets = parseMessages(d)
   assert.Equal(t, len(packets), 1)
   packet = packets[0]
   assert.Equal(t, "a.key.with-0.dash", packet.Bucket)
@@ -73,7 +73,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("a.key.with-0.dash:4|c\ngauge:3|g")
-  packets = parseMessage(d)
+  packets = parseMessages(d)
   assert.Equal(t, len(packets), 2)
   packet = packets[0]
   assert.Equal(t, "a.key.with-0.dash", packet.Bucket)
@@ -88,18 +88,18 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("a.key.with-0.dash:4\ngauge3|g")
-  packets = parseMessage(d)
+  packets = parseMessages(d)
   assert.Equal(t, len(packets), 0)
 
   d = []byte("a.key.with-0.dash:4")
-  packets = parseMessage(d)
+  packets = parseMessages(d)
   assert.Equal(t, len(packets), 0)
 }
 
 func TestMean(t *testing.T) {
   // Some data with expected mean of 20
   d := []byte("response_time:0|ms\nresponse_time:30|ms\nresponse_time:30|ms")
-  packets := parseMessage(d)
+  packets := parseMessages(d)
 
   for _, s := range packets {
     timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))
@@ -120,7 +120,7 @@ func TestMean(t *testing.T) {
 func TestUpperPercentile(t *testing.T) {
   // Some data with expected mean of 20
   d := []byte("time:0|ms\ntime:1|ms\ntime:2|ms\ntime:3|ms")
-  packets := parseMessage(d)
+  packets := parseMessages(d)
 
   for _, s := range packets {
     timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))
@@ -145,7 +145,7 @@ func TestUpperPercentile(t *testing.T) {
 func TestLowerPercentile(t *testing.T) {
   // Some data with expected mean of 20
   d := []byte("time:0|ms\ntime:1|ms\ntime:2|ms\ntime:3|ms")
-  packets := parseMessage(d)
+  packets := parseMessages(d)
 
   for _, s := range packets {
     timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))

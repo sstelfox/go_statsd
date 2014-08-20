@@ -278,7 +278,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 
 var packetRegexp = regexp.MustCompile("^([^:]+):(-?[0-9]+)\\|(g|c|ms)(\\|@([0-9\\.]+))?\n?$")
 
-func parseMessage(data []byte) []*StatSample {
+func parseMessages(data []byte) []*StatSample {
   var output []*StatSample
 
   for _, line := range bytes.Split(data, []byte("\n")) {
@@ -329,6 +329,12 @@ func parseMessage(data []byte) []*StatSample {
   return output
 }
 
+func bufferStatSamples(samples []*StatSample) {
+  for _, s := range samples {
+    StatPipe <- s
+  }
+}
+
 // Setup the UDP stat collection listener. Make sure it's setup too clean up
 // after itself when the server begins termination.
 func startStatListener() {
@@ -340,24 +346,23 @@ func startStatListener() {
   log.Printf("listening on %s:%d", addr.IP, addr.Port)
 
   listener, err := net.ListenUDP("udp", &addr)
-  if err != nil {
-    log.Fatalf("ERROR: ListenUDP - %s", err)
-  }
   defer listener.Close()
+
+  if err != nil {
+    log.Fatalf("Error: Failed too bind too address %s:%d: %s", addr.IP, addr.Port, err.Error())
+  }
 
   message := make([]byte, MAX_UDP_PACKET_SIZE)
 
   for {
-    n, remaddr, err := listener.ReadFromUDP(message)
+    byteCount, remoteAddress, err := listener.ReadFromUDP(message)
 
     if err != nil {
-      log.Printf("ERROR: reading UDP packet from %+v - %s", remaddr, err)
+      log.Printf("Error: Unable too read UDP packet from %+v - %s", remoteAddress, err.Error())
       continue
     }
 
-    for _, p := range parseMessage(message[:n]) {
-      StatPipe <- p
-    }
+    go bufferStatSamples(parseMessages(message[:byteCount]))
   }
 }
 
@@ -375,7 +380,6 @@ func parseCLI() {
   flag.StringVar(&receiveCounter, "receive-counter", "", "Metric name for total metrics recevied per interval")
 
   percentThreshold = Percentiles{}
-
   flag.Var(&percentThreshold, "percent-threshold", "Threshold percent (0-100, may be given multiple times)")
 
   flag.Parse()
