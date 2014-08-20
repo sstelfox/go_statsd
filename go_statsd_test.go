@@ -25,7 +25,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, "gaugor", packet.Bucket)
   assert.Equal(t, uint64(333), packet.Value.(uint64))
   assert.Equal(t, "g", packet.Modifier)
-  assert.Equal(t, float32(1), packet.Sampling)
+  assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("gorets:2|c|@0.1")
   packets = parseMessage(d)
@@ -34,7 +34,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, "gorets", packet.Bucket)
   assert.Equal(t, int64(2), packet.Value.(int64))
   assert.Equal(t, "c", packet.Modifier)
-  assert.Equal(t, float32(0.1), packet.Sampling)
+  assert.Equal(t, float32(0.1), packet.SampleRate)
 
   d = []byte("gorets:4|c")
   packets = parseMessage(d)
@@ -43,7 +43,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, "gorets", packet.Bucket)
   assert.Equal(t, int64(4), packet.Value.(int64))
   assert.Equal(t, "c", packet.Modifier)
-  assert.Equal(t, float32(1), packet.Sampling)
+  assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("gorets:-4|c")
   packets = parseMessage(d)
@@ -52,7 +52,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, "gorets", packet.Bucket)
   assert.Equal(t, int64(-4), packet.Value.(int64))
   assert.Equal(t, "c", packet.Modifier)
-  assert.Equal(t, float32(1), packet.Sampling)
+  assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("glork:320|ms")
   packets = parseMessage(d)
@@ -61,7 +61,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, "glork", packet.Bucket)
   assert.Equal(t, uint64(320), packet.Value.(uint64))
   assert.Equal(t, "ms", packet.Modifier)
-  assert.Equal(t, float32(1), packet.Sampling)
+  assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("a.key.with-0.dash:4|c")
   packets = parseMessage(d)
@@ -70,7 +70,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, "a.key.with-0.dash", packet.Bucket)
   assert.Equal(t, int64(4), packet.Value.(int64))
   assert.Equal(t, "c", packet.Modifier)
-  assert.Equal(t, float32(1), packet.Sampling)
+  assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("a.key.with-0.dash:4|c\ngauge:3|g")
   packets = parseMessage(d)
@@ -79,13 +79,13 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, "a.key.with-0.dash", packet.Bucket)
   assert.Equal(t, int64(4), packet.Value.(int64))
   assert.Equal(t, "c", packet.Modifier)
-  assert.Equal(t, float32(1), packet.Sampling)
+  assert.Equal(t, float32(1), packet.SampleRate)
 
   packet = packets[1]
   assert.Equal(t, "gauge", packet.Bucket)
   assert.Equal(t, uint64(3), packet.Value.(uint64))
   assert.Equal(t, "g", packet.Modifier)
-  assert.Equal(t, float32(1), packet.Sampling)
+  assert.Equal(t, float32(1), packet.SampleRate)
 
   d = []byte("a.key.with-0.dash:4\ngauge3|g")
   packets = parseMessage(d)
