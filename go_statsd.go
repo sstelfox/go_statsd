@@ -138,7 +138,7 @@ func publishAggregates(deadline time.Time) error {
 
   err = client.SetDeadline(deadline)
   if err != nil {
-    errmsg := fmt.Sprintf("could not set deadline:", err)
+    errmsg := fmt.Sprintf("Could not set deadline:", err)
     return errors.New(errmsg)
   }
 
@@ -151,7 +151,7 @@ func publishAggregates(deadline time.Time) error {
 
   _, err = client.Write(buffer.Bytes())
   if err != nil {
-    errmsg := fmt.Sprintf("failed to write stats - %s", err)
+    errmsg := fmt.Sprintf("Failed to write stats - %s", err)
     return errors.New(errmsg)
   }
 
