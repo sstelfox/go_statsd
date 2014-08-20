@@ -8,7 +8,7 @@ Currently Supports:
 
 * Timing
 * Counters
-* Gauges
+* Gauges (Does not support modifiers +/-)
 
 The logic around stat aggregation is currently closer to Bitly's implementation
 which is neither accurate, or compatible with the original statsd metrics. This
@@ -26,6 +26,8 @@ go get github.com/sstelfox/go_statsd
 * Make output statistics match the original Etsy implementation
 * Adjust internal logic around key names reflect the original implementation
 * Add Sets data type
+* Global stat prefix
+* Full gauges support
 
 # Change Log
 
