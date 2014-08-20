@@ -10,12 +10,7 @@ import (
   "time"
 )
 
-var commonPercentiles = Percentiles{
-  &Percentile{
-    99,
-    "99",
-  },
-}
+var commonPercentiles = Percentiles{99}
 
 func TestPacketParse(t *testing.T) {
   d := []byte("gaugor:333|g")
@@ -108,7 +103,7 @@ func TestMean(t *testing.T) {
   var buff bytes.Buffer
   var num int64
   num += processTimers(&buff, time.Now().Unix(), Percentiles{})
-  assert.Equal(t, num, int64(1))
+  assert.Equal(t, num, int64(4))
   dataForGraphite := buff.String()
   pattern := `response_time\.mean 20\.[0-9]+ `
   meanRegexp := regexp.MustCompile(pattern)
@@ -128,13 +123,8 @@ func TestUpperPercentile(t *testing.T) {
 
   var buff bytes.Buffer
   var num int64
-  num += processTimers(&buff, time.Now().Unix(), Percentiles{
-    &Percentile{
-      75,
-      "75",
-    },
-  })
-  assert.Equal(t, num, int64(1))
+  num += processTimers(&buff, time.Now().Unix(), Percentiles{75})
+  assert.Equal(t, num, int64(5))
   dataForGraphite := buff.String()
 
   meanRegexp := regexp.MustCompile(`time\.upper_75 2 `)
@@ -153,13 +143,8 @@ func TestLowerPercentile(t *testing.T) {
 
   var buff bytes.Buffer
   var num int64
-  num += processTimers(&buff, time.Now().Unix(), Percentiles{
-    &Percentile{
-      -75,
-      "-75",
-    },
-  })
-  assert.Equal(t, num, int64(1))
+  num += processTimers(&buff, time.Now().Unix(), Percentiles{-75})
+  assert.Equal(t, num, int64(5))
   dataForGraphite := buff.String()
 
   meanRegexp := regexp.MustCompile(`time\.upper_75 1 `)

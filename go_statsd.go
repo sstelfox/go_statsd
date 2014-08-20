@@ -30,30 +30,28 @@ type StatSample struct {
   SampleRate float32
 }
 
+// These are used too aggregate timer metrics
 type Uint64Slice []uint64
 func (s Uint64Slice) Len() int           { return len(s) }
 func (s Uint64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s Uint64Slice) Less(i, j int) bool { return s[i] < s[j] }
 
-type Percentile struct {
-  float float64
-  str   string
-}
+type Percentiles []int
+func (i *Percentiles) String() string { return fmt.Sprintf("%v", *i) }
+func (i *Percentiles) Set(value string) error {
+  // Reset any existing values before setting setting up the requested
+  // percentiles
+  *i = make(Percentiles, 0)
 
-func (p *Percentile) String() string { return p.str }
+  for _, element := range strings.Split(value, ",") {
+    value, err := strconv.Atoi(element)
 
-type Percentiles []*Percentile
+    if err != nil {
+      return err
+    }
 
-func (a *Percentiles) String() string { return fmt.Sprintf("%v", *a) }
-
-func (a *Percentiles) Set(s string) error {
-  f, err := strconv.ParseFloat(s, 64)
-
-  if err != nil {
-    return err
+    *i = append(*i, value)
   }
-
-  *a = append(*a, &Percentile{f, strings.Replace(s, ".", "_", -1)})
 
   return nil
 }
@@ -125,7 +123,8 @@ func publishAggregates(deadline time.Time) {
 
   num += processCounters(&buffer, now)
   num += processGauges(&buffer, now)
-  num += processTimers(&buffer, now, percentThreshold)
+  num += processTimers(&buffer, now, percentileThresholds)
+
   if num == 0 {
     return
   }
@@ -185,57 +184,58 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
   var num int64
 
-  for u, t := range timers {
-    if len(t) > 0 {
-      sort.Sort(t)
-      min := t[0]
-      max := t[len(t)-1]
+  for key, times := range timers {
+    if len(times) > 0 {
+      sort.Sort(times)
+
+      min := times[0]
+      max := times[len(times)-1]
       maxAtThreshold := max
-      count := len(t)
+      count := len(times)
 
       sum := uint64(0)
-      for _, value := range t {
+      for _, value := range times {
         sum += value
       }
-      mean := float64(sum) / float64(len(t))
+      mean := float64(sum) / float64(len(times))
 
       for _, pct := range pctls {
+        var tmpl string
+        var abs int
+        if pct >= 0 {
+          abs = pct
+          tmpl = "%s.upper_%d %d %d\n"
+        } else {
+          abs = 100 + pct
+          tmpl = "%s.lower_%d %d %d\n"
+        }
 
-        if len(t) > 1 {
-          var abs float64
-          if pct.float >= 0 {
-            abs = pct.float
-          } else {
-            abs = 100 + pct.float
-          }
+        if len(times) > 1 {
           // poor man's math.Round(x):
           // math.Floor(x + 0.5)
-          indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
-          if pct.float >= 0 {
+          indexOfPerc := int(math.Floor(((float64(abs) / 100.0) * float64(count)) + 0.5))
+          if pct >= 0 {
             indexOfPerc -= 1 // index offset=0
           }
-          maxAtThreshold = t[indexOfPerc]
+          maxAtThreshold = times[indexOfPerc]
         }
 
-        var tmpl string
-        var pctstr string
-        if pct.float >= 0 {
-          tmpl = "%s.upper_%s %d %d\n"
-          pctstr = pct.str
-        } else {
-          tmpl = "%s.lower_%s %d %d\n"
-          pctstr = pct.str[1:]
+        if pct < 0 {
+          pct = pct * -1
         }
-        fmt.Fprintf(buffer, tmpl, u, pctstr, maxAtThreshold, now)
+
+        fmt.Fprintf(buffer, tmpl, key, pct, maxAtThreshold, now)
+
+        num++
       }
 
       var z Uint64Slice
-      timers[u] = z
+      timers[key] = z
 
-      fmt.Fprintf(buffer, "%s.mean %f %d\n", u, mean, now)
-      fmt.Fprintf(buffer, "%s.upper %d %d\n", u, max, now)
-      fmt.Fprintf(buffer, "%s.lower %d %d\n", u, min, now)
-      fmt.Fprintf(buffer, "%s.count %d %d\n", u, count, now)
+      fmt.Fprintf(buffer, "%s.mean %f %d\n", key, mean, now)
+      fmt.Fprintf(buffer, "%s.upper %d %d\n", key, max, now)
+      fmt.Fprintf(buffer, "%s.lower %d %d\n", key, min, now)
+      fmt.Fprintf(buffer, "%s.count %d %d\n", key, count, now)
 
       num += 4
     }
@@ -342,7 +342,7 @@ var (
   flushInterval int64
   graphiteAddress string
   listenAddress string
-  percentThreshold = Percentiles{}
+  percentileThresholds = Percentiles{}
   receiveCounter string
   showVersion bool
   statCollectionPort int
@@ -352,17 +352,14 @@ var (
 // line arguments.
 func parseCLI() {
   flag.IntVar(&statCollectionPort, "port", 8125, "The UDP port too listen for metrics on.")
-
   flag.StringVar(&listenAddress, "address", "::", "The address too bind the server too.")
-  flag.StringVar(&listenAddress, "a", "::", "The address too bind the server too (short hand).")
-
   flag.StringVar(&graphiteAddress, "graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
-  flag.Int64Var(&flushInterval, "flush-interval", 10, "Flush interval (seconds)")
+  flag.Int64Var(&flushInterval, "interval", 10, "Flush interval (seconds)")
   flag.BoolVar(&showVersion, "version", false, "Print version string and quit.")
   flag.StringVar(&receiveCounter, "receive-counter", "statsd.count", "Metric name for total metrics recevied per interval")
 
-  percentThreshold = Percentiles{}
-  flag.Var(&percentThreshold, "percent-threshold", "Threshold percent (0-100, may be given multiple times)")
+  percentileThresholds = Percentiles{50,90}
+  flag.Var(&percentileThresholds, "percentiles", "Percentile limits too calculate on timers (helps prevent long tails)")
 
   flag.Parse()
 }
