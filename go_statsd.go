@@ -79,7 +79,6 @@ func startCollector() {
     case sig := <-signalChannel:
       fmt.Printf("!! Caught signal %d... shutting down\n", sig)
       publishAggregates(time.Now().Add(period))
-
       return
     case <-publishTimer.C:
       publishAggregates(time.Now().Add(period))
@@ -89,15 +88,17 @@ func startCollector() {
       if (receiveCounter != "") {
         _, ok := counters[receiveCounter]
         if (!ok) { counters[receiveCounter] = 0 }
-
         counters[receiveCounter] += 1
       }
 
       if s.Modifier == "ms" {
+        // Handle timers
         _, ok := timers[s.Bucket]
         if !ok { timers[s.Bucket] = make(Int64Slice, 0) }
         timers[s.Bucket] = append(timers[s.Bucket], s.Value.(int64))
       } else if s.Modifier == "g" {
+        // Handle gauges
+        // TODO: Handle modifiers +/-
         gauges[s.Bucket] = s.Value.(int64)
       } else {
         // Handle counter types
@@ -147,13 +148,18 @@ func publishAggregates(deadline time.Time) {
   return
 }
 
+// Process counters and rates of incoming counters
 func processCounters(buffer *bytes.Buffer, now int64) int64 {
   var num int64
 
-  for s, c := range counters {
-    delete(counters, s)
-    fmt.Fprintf(buffer, "%s %d %d\n", s, c, now)
-    num++
+  for metric, count := range counters {
+    rate := (float64(count) / float64(flushInterval))
+
+    fmt.Fprintf(buffer, "%s.count %d %d\n", metric, count, now)
+    fmt.Fprintf(buffer, "%s.rate %f %d\n", metric, rate, now)
+
+    delete(counters, metric)
+    num += 2
   }
 
   return num
