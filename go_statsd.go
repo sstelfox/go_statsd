@@ -87,29 +87,23 @@ func startCollector() {
       // If we're tracking total received stats, initialize the counter if
       // necessary and increment it for this interval.
       if (receiveCounter != "") {
-        v, ok := counters[receiveCounter]
-        if !ok || v < 0 {
-          counters[receiveCounter] = 0
-        }
+        _, ok := counters[receiveCounter]
+        if (!ok) { counters[receiveCounter] = 0 }
 
         counters[receiveCounter] += 1
       }
 
       if s.Modifier == "ms" {
         _, ok := timers[s.Bucket]
-        if !ok {
-          var t Int64Slice
-          timers[s.Bucket] = t
-        }
+        if !ok { timers[s.Bucket] = make(Int64Slice, 0) }
         timers[s.Bucket] = append(timers[s.Bucket], s.Value.(int64))
       } else if s.Modifier == "g" {
         gauges[s.Bucket] = s.Value.(int64)
       } else {
-        v, ok := counters[s.Bucket]
-        if !ok || v < 0 {
-          counters[s.Bucket] = 0
-        }
-        counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.SampleRate))
+        // Handle counter types
+        _, ok := counters[s.Bucket]
+        if (!ok) { counters[s.Bucket] = 0 }
+        counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1 / s.SampleRate))
       }
     }
   }
