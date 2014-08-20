@@ -62,18 +62,6 @@ func (a *Percentiles) Set(s string) error {
 }
 
 var (
-  debug bool
-  flushInterval int64
-  graphiteAddress string
-  percentThreshold = Percentiles{}
-  persistCountKeys int64
-  receiveCounter string
-  showVersion bool
-  listenAddress string
-  statCollectionPort int
-)
-
-var (
   StatPipe = make(chan *StatSample, MAX_UNPROCESSED_PACKETS)
   counters = make(map[string]int64)
   gauges   = make(map[string]uint64)
@@ -87,12 +75,12 @@ func startCollector() {
     select {
     case sig := <-signalChannel:
       log.Printf("!! Caught signal %d... shutting down\n", sig)
-      if err := submit(time.Now().Add(period)); err != nil {
+      if err := publishAggregates(time.Now().Add(period)); err != nil {
         log.Printf("ERROR: %s", err)
       }
       return
     case <-ticker.C:
-      if err := submit(time.Now().Add(period)); err != nil {
+      if err := publishAggregates(time.Now().Add(period)); err != nil {
         log.Printf("ERROR: %s", err)
       }
     case s := <-StatPipe:
@@ -124,7 +112,7 @@ func startCollector() {
   }
 }
 
-func submit(deadline time.Time) error {
+func publishAggregates(deadline time.Time) error {
   var buffer bytes.Buffer
   var num int64
 
@@ -218,6 +206,7 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 
 func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
   var num int64
+
   for u, t := range timers {
     if len(t) > 0 {
       num++
@@ -273,6 +262,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
       fmt.Fprintf(buffer, "%s.count %d %d\n", u, count, now)
     }
   }
+
   return num
 }
 
@@ -329,6 +319,8 @@ func parseMessages(data []byte) []*StatSample {
   return output
 }
 
+// When provided with parsed StatSamples this will loop through them and inject
+// them into the pipe for processing and aggregation.
 func bufferStatSamples(samples []*StatSample) {
   for _, s := range samples {
     StatPipe <- s
@@ -366,6 +358,21 @@ func startStatListener() {
   }
 }
 
+// Variables related too command line options and general configuration
+var (
+  debug bool
+  flushInterval int64
+  graphiteAddress string
+  listenAddress string
+  percentThreshold = Percentiles{}
+  persistCountKeys int64
+  receiveCounter string
+  showVersion bool
+  statCollectionPort int
+)
+
+// Central location for the configuration and definition of the various command
+// line arguments.
 func parseCLI() {
   flag.IntVar(&statCollectionPort, "port", 8125, "The UDP port too listen for metrics on.")
 
