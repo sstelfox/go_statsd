@@ -358,7 +358,7 @@ func parseCLI() {
 
   flag.StringVar(&graphiteAddress, "graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
   flag.Int64Var(&flushInterval, "flush-interval", 10, "Flush interval (seconds)")
-  flag.BoolVar(&showVersion, "version", false, "print version string")
+  flag.BoolVar(&showVersion, "version", false, "Print version string and quit.")
   flag.StringVar(&receiveCounter, "receive-counter", "statsd.count", "Metric name for total metrics recevied per interval")
 
   percentThreshold = Percentiles{}

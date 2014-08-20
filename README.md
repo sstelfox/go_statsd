@@ -1,14 +1,18 @@
 # go_statsd
 
-Clean-up and feature complete port (minus various backends) of [Etsy's
-statsd][1] written in Go. This is a fork of [Bitly's Implementation][2] which
-is in turn a fork of another repo [amir/gographite][3].
+This will be a feature complete port (minus some of the backends) of
+[Etsy's statsd][1] written in Go. This is a heavily modified fork of
+[Bitly's Implementation][2] which is in turn a fork of [amir/gographite][3].
 
-Supports:
+Currently Supports:
 
 * Timing
 * Counters
 * Gauges
+
+The logic around stat aggregation is currently closer to Bitly's implementation
+which is neither accurate, or compatible with the original statsd metrics. This
+will be rapidly changing too reflect actual statistical measuring means.
 
 # Installing
 
@@ -16,11 +20,22 @@ Supports:
 go get github.com/sstelfox/go_statsd
 ```
 
+# Roadmap
+
+* Implement network compatible version of statsd management interface
+* Make output statistics match the original Etsy implementation
+* Adjust internal logic around key names reflect the original implementation
+* Add Sets data type
+
 # Change Log
 
 0.5.5-alpha:
 
-* Primarily code clean up, white space corrections, and more accurate variable names
+* Primarily code clean up, white space corrections, and more accurate variable
+  and function names.
+* No longer sending invalid '0' metrics for counts, instead just not connecting
+  to graphite if there are no stats too send.
+* Removed unecessary imports
 
 0.5.2-alpha:
 
@@ -29,17 +44,18 @@ go get github.com/sstelfox/go_statsd
 # Command Line Options
 
 ```
-Usage of ./statsdaemon:
-  -address=":8125": UDP service address
-  -debug=false: print statistics sent to graphite
+Usage of ./go_statsd:
+  -a="::": The address too bind the server too (short hand).
+  -address="::": The address too bind the server too.
   -flush-interval=10: Flush interval (seconds)
   -graphite="127.0.0.1:2003": Graphite service address (or - to disable)
   -percent-threshold=[]: Threshold percent (0-100, may be given multiple times)
-  -persist-count-keys=60: number of flush-interval's to persist count keys
-  -receive-counter="": Metric name for total metrics recevied per interval
-  -version=false: print version string
+  -port=8125: The UDP port too listen for metrics on.
+  -receive-counter="statsd.count": Metric name for total metrics recevied per interval
+  -version=false: Print version string and quit
 ```
 
 [1]: https://github.com/etsy/statsd
 [2]: https://github.com/bitly/statsdaemon
 [3]: https://github.com/amir/gographite
+
