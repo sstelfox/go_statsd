@@ -31,10 +31,10 @@ type StatSample struct {
 }
 
 // These are used too aggregate timer metrics
-type Uint64Slice []uint64
-func (s Uint64Slice) Len() int           { return len(s) }
-func (s Uint64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s Uint64Slice) Less(i, j int) bool { return s[i] < s[j] }
+type Int64Slice []int64
+func (s Int64Slice) Len() int           { return len(s) }
+func (s Int64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s Int64Slice) Less(i, j int) bool { return s[i] < s[j] }
 
 type Percentiles []int
 func (i *Percentiles) String() string { return fmt.Sprintf("%v", *i) }
@@ -61,8 +61,8 @@ var (
   signalChannel = make(chan os.Signal, 1)
 
   counters      = make(map[string]int64)
-  gauges        = make(map[string]uint64)
-  timers        = make(map[string]Uint64Slice)
+  gauges        = make(map[string]int64)
+  timers        = make(map[string]Int64Slice)
 )
 
 func startCollector() {
@@ -98,12 +98,12 @@ func startCollector() {
       if s.Modifier == "ms" {
         _, ok := timers[s.Bucket]
         if !ok {
-          var t Uint64Slice
+          var t Int64Slice
           timers[s.Bucket] = t
         }
-        timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))
+        timers[s.Bucket] = append(timers[s.Bucket], s.Value.(int64))
       } else if s.Modifier == "g" {
-        gauges[s.Bucket] = s.Value.(uint64)
+        gauges[s.Bucket] = s.Value.(int64)
       } else {
         v, ok := counters[s.Bucket]
         if !ok || v < 0 {
@@ -165,16 +165,15 @@ func processCounters(buffer *bytes.Buffer, now int64) int64 {
   return num
 }
 
+// TODO: Track whether or not gauges are 'dirty' (value has changed since the
+// last time we sent metrics) instead of just deleting the value. This will
+// allow us too support 'modifiers' on gauges.
 func processGauges(buffer *bytes.Buffer, now int64) int64 {
   var num int64
 
-  for g, c := range gauges {
-    if c == math.MaxUint64 {
-      continue
-    }
-
-    fmt.Fprintf(buffer, "%s %d %d\n", g, c, now)
-    gauges[g] = math.MaxUint64
+  for metric, value := range gauges {
+    fmt.Fprintf(buffer, "%s %d %d\n", metric, value, now)
+    delete(gauges, metric)
     num++
   }
 
@@ -193,7 +192,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
       maxAtThreshold := max
       count := len(times)
 
-      sum := uint64(0)
+      sum := int64(0)
       for _, value := range times {
         sum += value
       }
@@ -229,7 +228,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
         num++
       }
 
-      var z Uint64Slice
+      var z Int64Slice
       timers[key] = z
 
       fmt.Fprintf(buffer, "%s.mean %f %d\n", key, mean, now)
@@ -244,8 +243,12 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
   return num
 }
 
+// TODO 'Gauges' can have a + or - sign at the beginning of their value
+// indicating that the current value should be modified rather than set too a
+// static value.
 var packetRegexp = regexp.MustCompile("^([^:]+):(-?[0-9]+)\\|(g|c|ms)(\\|@([0-9\\.]+))?\n?$")
 
+// TODO: Handle gauge modifiers
 func parseMessages(data []byte) []*StatSample {
   var output []*StatSample
 
@@ -264,19 +267,10 @@ func parseMessages(data []byte) []*StatSample {
 
     modifier := string(item[3])
 
-    switch modifier {
-      case "c":
-        value, err = strconv.ParseInt(string(item[2]), 10, 64)
-        if err != nil {
-          fmt.Printf("Error: failed to ParseInt %s - %s\n", item[2], err)
-          continue
-        }
-      default:
-        value, err = strconv.ParseUint(string(item[2]), 10, 64)
-        if err != nil {
-          fmt.Printf("Error: failed to ParseUint %s - %s\n", item[2], err)
-          continue
-        }
+    value, err = strconv.ParseInt(string(item[2]), 10, 64)
+    if err != nil {
+      fmt.Printf("Error: failed to ParseInt %s - %s\n", item[2], err)
+      continue
     }
 
     sampleRate, err := strconv.ParseFloat(string(item[5]), 32)

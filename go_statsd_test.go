@@ -18,7 +18,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, len(packets), 1)
   packet := packets[0]
   assert.Equal(t, "gaugor", packet.Bucket)
-  assert.Equal(t, uint64(333), packet.Value.(uint64))
+  assert.Equal(t, int64(333), packet.Value.(int64))
   assert.Equal(t, "g", packet.Modifier)
   assert.Equal(t, float32(1), packet.SampleRate)
 
@@ -54,7 +54,7 @@ func TestPacketParse(t *testing.T) {
   assert.Equal(t, len(packets), 1)
   packet = packets[0]
   assert.Equal(t, "glork", packet.Bucket)
-  assert.Equal(t, uint64(320), packet.Value.(uint64))
+  assert.Equal(t, int64(320), packet.Value.(int64))
   assert.Equal(t, "ms", packet.Modifier)
   assert.Equal(t, float32(1), packet.SampleRate)
 
@@ -78,7 +78,7 @@ func TestPacketParse(t *testing.T) {
 
   packet = packets[1]
   assert.Equal(t, "gauge", packet.Bucket)
-  assert.Equal(t, uint64(3), packet.Value.(uint64))
+  assert.Equal(t, int64(3), packet.Value.(int64))
   assert.Equal(t, "g", packet.Modifier)
   assert.Equal(t, float32(1), packet.SampleRate)
 
@@ -97,7 +97,7 @@ func TestMean(t *testing.T) {
   packets := parseMessages(d)
 
   for _, s := range packets {
-    timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))
+    timers[s.Bucket] = append(timers[s.Bucket], s.Value.(int64))
   }
 
   var buff bytes.Buffer
@@ -118,7 +118,7 @@ func TestUpperPercentile(t *testing.T) {
   packets := parseMessages(d)
 
   for _, s := range packets {
-    timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))
+    timers[s.Bucket] = append(timers[s.Bucket], s.Value.(int64))
   }
 
   var buff bytes.Buffer
@@ -138,7 +138,7 @@ func TestLowerPercentile(t *testing.T) {
   packets := parseMessages(d)
 
   for _, s := range packets {
-    timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))
+    timers[s.Bucket] = append(timers[s.Bucket], s.Value.(int64))
   }
 
   var buff bytes.Buffer
@@ -161,7 +161,7 @@ func BenchmarkManyDifferentSensors(t *testing.B) {
   for i := 0; i < 1000; i++ {
     bucket := "response_time" + strconv.Itoa(i)
     for i := 0; i < 10000; i++ {
-      a := uint64(r.Uint32() % 1000)
+      a := int64(r.Int31() % 1000)
       timers[bucket] = append(timers[bucket], a)
     }
   }
@@ -169,7 +169,7 @@ func BenchmarkManyDifferentSensors(t *testing.B) {
   for i := 0; i < 1000; i++ {
     bucket := "count" + strconv.Itoa(i)
     for i := 0; i < 10000; i++ {
-      a := int64(r.Uint32() % 1000)
+      a := int64(r.Int31() % 1000)
       counters[bucket] = a
     }
   }
@@ -177,7 +177,7 @@ func BenchmarkManyDifferentSensors(t *testing.B) {
   for i := 0; i < 1000; i++ {
     bucket := "gauge" + strconv.Itoa(i)
     for i := 0; i < 10000; i++ {
-      a := uint64(r.Uint32() % 1000)
+      a := int64(r.Int31() % 1000)
       gauges[bucket] = a
     }
   }
@@ -194,7 +194,7 @@ func BenchmarkOneBigTimer(t *testing.B) {
   r := rand.New(rand.NewSource(438))
   bucket := "response_time"
   for i := 0; i < 10000000; i++ {
-    a := uint64(r.Uint32() % 1000)
+    a := int64(r.Int31() % 1000)
     timers[bucket] = append(timers[bucket], a)
   }
 
@@ -208,7 +208,7 @@ func BenchmarkLotsOfTimers(t *testing.B) {
   for i := 0; i < 1000; i++ {
     bucket := "response_time" + strconv.Itoa(i)
     for i := 0; i < 10000; i++ {
-      a := uint64(r.Uint32() % 1000)
+      a := int64(r.Int31() % 1000)
       timers[bucket] = append(timers[bucket], a)
     }
   }
