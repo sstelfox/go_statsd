@@ -6,7 +6,6 @@ import (
   "errors"
   "flag"
   "fmt"
-  "log"
   "math"
   "net"
   "os"
@@ -24,8 +23,6 @@ const (
   MAX_UNPROCESSED_PACKETS = 2048
   MAX_UDP_PACKET_SIZE     = 784
 )
-
-var signalChannel chan os.Signal
 
 type StatSample struct {
   Bucket   string
@@ -49,6 +46,7 @@ func (p *Percentile) String() string { return p.str }
 type Percentiles []*Percentile
 
 func (a *Percentiles) String() string { return fmt.Sprintf("%v", *a) }
+
 func (a *Percentiles) Set(s string) error {
   f, err := strconv.ParseFloat(s, 64)
 
@@ -62,33 +60,46 @@ func (a *Percentiles) Set(s string) error {
 }
 
 var (
-  StatPipe = make(chan *StatSample, MAX_UNPROCESSED_PACKETS)
-  counters = make(map[string]int64)
-  gauges   = make(map[string]uint64)
-  timers   = make(map[string]Uint64Slice)
+  StatPipe      = make(chan *StatSample, MAX_UNPROCESSED_PACKETS)
+  signalChannel = make(chan os.Signal, 1)
+
+  counters      = make(map[string]int64)
+  gauges        = make(map[string]uint64)
+  timers        = make(map[string]Uint64Slice)
 )
 
 func startCollector() {
+  // Limit the amount of time we attempt too submit information to the backend
+  // too the flushInterval so data is always sent in the correct order and we
+  // don't have several hanging open connections.
   period := time.Duration(flushInterval) * time.Second
-  ticker := time.NewTicker(period)
+
+  // The timer that'll trigger our submission of aggregate data
+  publishTimer := time.NewTicker(period)
+
   for {
     select {
     case sig := <-signalChannel:
-      log.Printf("!! Caught signal %d... shutting down\n", sig)
+      fmt.Printf("!! Caught signal %d... shutting down\n", sig)
+
       if err := publishAggregates(time.Now().Add(period)); err != nil {
-        log.Printf("ERROR: %s", err)
+        fmt.Printf("Error: Unable too publish final counts - %s\n", err.Error())
       }
+
       return
-    case <-ticker.C:
+    case <-publishTimer.C:
       if err := publishAggregates(time.Now().Add(period)); err != nil {
-        log.Printf("ERROR: %s", err)
+        fmt.Printf("Error: Unable too publish counts - %s\n", err.Error())
       }
     case s := <-StatPipe:
+      // If we're tracking total received stats, initialize the counter if
+      // necessary and increment it for this interval.
       if (receiveCounter != "") {
         v, ok := counters[receiveCounter]
         if !ok || v < 0 {
           counters[receiveCounter] = 0
         }
+
         counters[receiveCounter] += 1
       }
 
@@ -120,13 +131,7 @@ func publishAggregates(deadline time.Time) error {
 
   client, err := net.Dial("tcp", graphiteAddress)
   if err != nil {
-    if debug {
-      log.Printf("WARNING: resetting counters when in debug mode")
-      processCounters(&buffer, now)
-      processGauges(&buffer, now)
-      processTimers(&buffer, now, percentThreshold)
-    }
-    errmsg := fmt.Sprintf("dialing %s failed - %s", graphiteAddress, err)
+    errmsg := fmt.Sprintf("Dialing %s failed - %s", graphiteAddress, err)
     return errors.New(errmsg)
   }
   defer client.Close()
@@ -144,22 +149,13 @@ func publishAggregates(deadline time.Time) error {
     return nil
   }
 
-  if debug {
-    for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
-      if len(line) == 0 {
-        continue
-      }
-      log.Printf("DEBUG: %s", line)
-    }
-  }
-
   _, err = client.Write(buffer.Bytes())
   if err != nil {
     errmsg := fmt.Sprintf("failed to write stats - %s", err)
     return errors.New(errmsg)
   }
 
-  log.Printf("sent %d stats to %s", num, graphiteAddress)
+  fmt.Printf("Sent %d stats to %s\n", num, graphiteAddress)
 
   return nil
 }
@@ -290,13 +286,13 @@ func parseMessages(data []byte) []*StatSample {
       case "c":
         value, err = strconv.ParseInt(string(item[2]), 10, 64)
         if err != nil {
-          log.Printf("ERROR: failed to ParseInt %s - %s", item[2], err)
+          fmt.Printf("Error: failed to ParseInt %s - %s\n", item[2], err)
           continue
         }
       default:
         value, err = strconv.ParseUint(string(item[2]), 10, 64)
         if err != nil {
-          log.Printf("ERROR: failed to ParseUint %s - %s", item[2], err)
+          fmt.Printf("Error: failed to ParseUint %s - %s\n", item[2], err)
           continue
         }
     }
@@ -307,9 +303,9 @@ func parseMessages(data []byte) []*StatSample {
     }
 
     stat := &StatSample{
-      Bucket:   string(item[1]),
-      Value:    value,
-      Modifier: modifier,
+      Bucket:     string(item[1]),
+      Value:      value,
+      Modifier:   modifier,
       SampleRate: float32(sampleRate),
     }
 
@@ -335,13 +331,14 @@ func startStatListener() {
     IP: net.ParseIP(listenAddress),
   }
 
-  log.Printf("listening on %s:%d", addr.IP, addr.Port)
+  fmt.Printf("Listening on %s:%d\n", addr.IP, addr.Port)
 
   listener, err := net.ListenUDP("udp", &addr)
   defer listener.Close()
 
   if err != nil {
-    log.Fatalf("Error: Failed too bind too address %s:%d: %s", addr.IP, addr.Port, err.Error())
+    fmt.Printf("Error: Failed too bind too address %s:%d: %s\n", addr.IP, addr.Port, err.Error())
+    panic(err)
   }
 
   message := make([]byte, MAX_UDP_PACKET_SIZE)
@@ -350,7 +347,7 @@ func startStatListener() {
     byteCount, remoteAddress, err := listener.ReadFromUDP(message)
 
     if err != nil {
-      log.Printf("Error: Unable too read UDP packet from %+v - %s", remoteAddress, err.Error())
+      fmt.Printf("Error: Unable too read UDP packet from %+v - %s\n", remoteAddress, err.Error())
       continue
     }
 
@@ -360,7 +357,6 @@ func startStatListener() {
 
 // Variables related too command line options and general configuration
 var (
-  debug bool
   flushInterval int64
   graphiteAddress string
   listenAddress string
@@ -381,10 +377,9 @@ func parseCLI() {
 
   flag.StringVar(&graphiteAddress, "graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
   flag.Int64Var(&flushInterval, "flush-interval", 10, "Flush interval (seconds)")
-  flag.BoolVar(&debug, "debug", false, "print statistics sent to graphite")
   flag.BoolVar(&showVersion, "version", false, "print version string")
   flag.Int64Var(&persistCountKeys, "persist-count-keys", 60, "number of flush-interval's to persist count keys")
-  flag.StringVar(&receiveCounter, "receive-counter", "", "Metric name for total metrics recevied per interval")
+  flag.StringVar(&receiveCounter, "receive-counter", "statsd.count", "Metric name for total metrics recevied per interval")
 
   percentThreshold = Percentiles{}
   flag.Var(&percentThreshold, "percent-threshold", "Threshold percent (0-100, may be given multiple times)")
@@ -400,7 +395,6 @@ func main() {
     return
   }
 
-  signalChannel = make(chan os.Signal, 1)
   signal.Notify(signalChannel, syscall.SIGTERM)
   signal.Notify(signalChannel, syscall.SIGINT)
 
