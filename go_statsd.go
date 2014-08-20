@@ -3,7 +3,6 @@ package main
 
 import (
   "bytes"
-  "errors"
   "flag"
   "fmt"
   "math"
@@ -81,16 +80,11 @@ func startCollector() {
     select {
     case sig := <-signalChannel:
       fmt.Printf("!! Caught signal %d... shutting down\n", sig)
-
-      if err := publishAggregates(time.Now().Add(period)); err != nil {
-        fmt.Printf("Error: Unable too publish final counts - %s\n", err.Error())
-      }
+      publishAggregates(time.Now().Add(period))
 
       return
     case <-publishTimer.C:
-      if err := publishAggregates(time.Now().Add(period)); err != nil {
-        fmt.Printf("Error: Unable too publish counts - %s\n", err.Error())
-      }
+      publishAggregates(time.Now().Add(period))
     case s := <-StatPipe:
       // If we're tracking total received stats, initialize the counter if
       // necessary and increment it for this interval.
@@ -123,64 +117,52 @@ func startCollector() {
   }
 }
 
-func publishAggregates(deadline time.Time) error {
+func publishAggregates(deadline time.Time) {
   var buffer bytes.Buffer
   var num int64
 
   now := time.Now().Unix()
 
+  num += processCounters(&buffer, now)
+  num += processGauges(&buffer, now)
+  num += processTimers(&buffer, now, percentThreshold)
+  if num == 0 {
+    return
+  }
+
   client, err := net.Dial("tcp", graphiteAddress)
   if err != nil {
-    errmsg := fmt.Sprintf("Dialing %s failed - %s", graphiteAddress, err)
-    return errors.New(errmsg)
+    fmt.Printf("Error: Unable too publish counts - Dialing %s failed - %s\n", graphiteAddress, err.Error())
+    return
   }
   defer client.Close()
 
   err = client.SetDeadline(deadline)
   if err != nil {
-    errmsg := fmt.Sprintf("Could not set deadline:", err)
-    return errors.New(errmsg)
-  }
-
-  num += processCounters(&buffer, now)
-  num += processGauges(&buffer, now)
-  num += processTimers(&buffer, now, percentThreshold)
-  if num == 0 {
-    return nil
+    fmt.Printf("Error: Could not set deadline on connection to %s - %s\n", graphiteAddress, err.Error())
+    return
   }
 
   _, err = client.Write(buffer.Bytes())
   if err != nil {
-    errmsg := fmt.Sprintf("Failed to write stats - %s", err)
-    return errors.New(errmsg)
+    fmt.Printf("Error: Failed to write stats to %s - %s\n", graphiteAddress, err.Error())
+    return
   }
 
   fmt.Printf("Sent %d stats to %s\n", num, graphiteAddress)
 
-  return nil
+  return
 }
 
 func processCounters(buffer *bytes.Buffer, now int64) int64 {
   var num int64
-  // continue sending zeros for counters for a short period of time even if we have no new data
-  // note we use the same in-memory value to denote both the actual value of the counter (value >= 0)
-  // as well as how many turns to keep the counter for (value < 0)
-  // for more context see https://github.com/bitly/statsdaemon/pull/8
+
   for s, c := range counters {
-    switch {
-    case c <= persistCountKeys:
-      // consider this purgable
-      delete(counters, s)
-      continue
-    case c < 0:
-      counters[s] -= 1
-      fmt.Fprintf(buffer, "%s %d %d\n", s, 0, now)
-    case c >= 0:
-      counters[s] = -1
-      fmt.Fprintf(buffer, "%s %d %d\n", s, c, now)
-    }
+    delete(counters, s)
+    fmt.Fprintf(buffer, "%s %d %d\n", s, c, now)
     num++
   }
+
   return num
 }
 
@@ -361,7 +343,6 @@ var (
   graphiteAddress string
   listenAddress string
   percentThreshold = Percentiles{}
-  persistCountKeys int64
   receiveCounter string
   showVersion bool
   statCollectionPort int
@@ -378,7 +359,6 @@ func parseCLI() {
   flag.StringVar(&graphiteAddress, "graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
   flag.Int64Var(&flushInterval, "flush-interval", 10, "Flush interval (seconds)")
   flag.BoolVar(&showVersion, "version", false, "print version string")
-  flag.Int64Var(&persistCountKeys, "persist-count-keys", 60, "number of flush-interval's to persist count keys")
   flag.StringVar(&receiveCounter, "receive-counter", "statsd.count", "Metric name for total metrics recevied per interval")
 
   percentThreshold = Percentiles{}
@@ -397,8 +377,6 @@ func main() {
 
   signal.Notify(signalChannel, syscall.SIGTERM)
   signal.Notify(signalChannel, syscall.SIGINT)
-
-  persistCountKeys = -1 * (persistCountKeys)
 
   go startStatListener()
   startCollector()
