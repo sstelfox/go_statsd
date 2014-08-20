@@ -68,8 +68,9 @@ var (
   percentThreshold = Percentiles{}
   persistCountKeys int64
   receiveCounter string
-  serviceAddress string
   showVersion bool
+  listenAddress string
+  statCollectionPort int
 )
 
 var (
@@ -292,20 +293,22 @@ func parseMessage(data []byte) []*StatSample {
 
     var err error
     var value interface{}
+
     modifier := string(item[3])
+
     switch modifier {
-    case "c":
-      value, err = strconv.ParseInt(string(item[2]), 10, 64)
-      if err != nil {
-        log.Printf("ERROR: failed to ParseInt %s - %s", item[2], err)
-        continue
-      }
-    default:
-      value, err = strconv.ParseUint(string(item[2]), 10, 64)
-      if err != nil {
-        log.Printf("ERROR: failed to ParseUint %s - %s", item[2], err)
-        continue
-      }
+      case "c":
+        value, err = strconv.ParseInt(string(item[2]), 10, 64)
+        if err != nil {
+          log.Printf("ERROR: failed to ParseInt %s - %s", item[2], err)
+          continue
+        }
+      default:
+        value, err = strconv.ParseUint(string(item[2]), 10, 64)
+        if err != nil {
+          log.Printf("ERROR: failed to ParseUint %s - %s", item[2], err)
+          continue
+        }
     }
 
     sampleRate, err := strconv.ParseFloat(string(item[5]), 32)
@@ -319,18 +322,24 @@ func parseMessage(data []byte) []*StatSample {
       Modifier: modifier,
       SampleRate: float32(sampleRate),
     }
+
     output = append(output, stat)
   }
 
   return output
 }
 
+// Setup the UDP stat collection listener. Make sure it's setup too clean up
+// after itself when the server begins termination.
 func startStatListener() {
-  address, _ := net.ResolveUDPAddr("udp", serviceAddress)
+  addr := net.UDPAddr {
+    Port: statCollectionPort,
+    IP: net.ParseIP(listenAddress),
+  }
 
-  log.Printf("listening on %s", address)
+  log.Printf("listening on %s:%d", addr.IP, addr.Port)
 
-  listener, err := net.ListenUDP("udp", address)
+  listener, err := net.ListenUDP("udp", &addr)
   if err != nil {
     log.Fatalf("ERROR: ListenUDP - %s", err)
   }
@@ -353,7 +362,11 @@ func startStatListener() {
 }
 
 func parseCLI() {
-  flag.StringVar(&serviceAddress, "address", ":8125", "UDP service address")
+  flag.IntVar(&statCollectionPort, "port", 8125, "The UDP port too listen for metrics on.")
+
+  flag.StringVar(&listenAddress, "address", "::", "The address too bind the server too.")
+  flag.StringVar(&listenAddress, "a", "::", "The address too bind the server too (short hand).")
+
   flag.StringVar(&graphiteAddress, "graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
   flag.Int64Var(&flushInterval, "flush-interval", 10, "Flush interval (seconds)")
   flag.BoolVar(&debug, "debug", false, "print statistics sent to graphite")
