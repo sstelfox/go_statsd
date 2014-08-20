@@ -187,8 +187,6 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 
   for u, t := range timers {
     if len(t) > 0 {
-      num++
-
       sort.Sort(t)
       min := t[0]
       max := t[len(t)-1]
@@ -238,6 +236,8 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
       fmt.Fprintf(buffer, "%s.upper %d %d\n", u, max, now)
       fmt.Fprintf(buffer, "%s.lower %d %d\n", u, min, now)
       fmt.Fprintf(buffer, "%s.count %d %d\n", u, count, now)
+
+      num += 4
     }
   }
 
