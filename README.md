@@ -7,7 +7,7 @@ This will be a feature complete port (minus some of the backends) of
 Currently Supports:
 
 * Timing
-* Counters
+* Counters (With both raw values and rates)
 * Gauges (Does not support modifiers +/-)
 
 The logic around stat aggregation is currently closer to Bitly's implementation
@@ -38,6 +38,9 @@ go get github.com/sstelfox/go_statsd
 * No longer sending invalid '0' metrics for counts, instead just not connecting
   to graphite if there are no stats too send.
 * Removed unecessary imports
+* Made counters stat compatible with StatsD implemenation
+* Added rates too counters
+* Cleaned up unecessary complexity around counters
 
 0.5.2-alpha:
 
