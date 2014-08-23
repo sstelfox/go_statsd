@@ -246,8 +246,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
         num++
       }
 
-      var z Int64Slice
-      timers[key] = z
+      timers[key] = make(Int64Slice, 0)
 
       fmt.Fprintf(buffer, "%s.mean %f %d\n", key, mean, now)
       fmt.Fprintf(buffer, "%s.upper %d %d\n", key, max, now)
