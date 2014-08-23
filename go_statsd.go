@@ -18,29 +18,31 @@ import (
 )
 
 const (
-  VERSION                 = "0.5.5-alpha"
+  VERSION                 = "0.6.0"
   MAX_UNPROCESSED_PACKETS = 2048
   MAX_UDP_PACKET_SIZE     = 784
 )
 
 type StatSample struct {
-  Bucket   string
-  Value    interface{}
-  Modifier string
+  Bucket     string
+  Value      interface{}
+  Type       string
   SampleRate float32
 }
 
-// These are used too aggregate timer metrics
+// This data type is for metric aggregation, the functions implement the
+// sort.Interface.
 type Int64Slice []int64
 func (s Int64Slice) Len() int           { return len(s) }
 func (s Int64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s Int64Slice) Less(i, j int) bool { return s[i] < s[j] }
 
+// Implementation of the flag.Value interface for collecting several comma
+// separated integer values into an array.
 type Percentiles []int
 func (i *Percentiles) String() string { return fmt.Sprintf("%v", *i) }
 func (i *Percentiles) Set(value string) error {
-  // Reset any existing values before setting setting up the requested
-  // percentiles
+  // Reset any existing values before setting up the requested percentiles
   *i = make(Percentiles, 0)
 
   for _, element := range strings.Split(value, ",") {
@@ -56,6 +58,7 @@ func (i *Percentiles) Set(value string) error {
   return nil
 }
 
+// Communication channels and global metric variables.
 var (
   StatPipe      = make(chan *StatSample, MAX_UNPROCESSED_PACKETS)
   signalChannel = make(chan os.Signal, 1)
@@ -65,6 +68,9 @@ var (
   timers        = make(map[string]Int64Slice)
 )
 
+// This handles the processing of individual already parsed StatSample
+// messages into the aggregate counts as well as periodically triggering the
+// flush too graphite.
 func startCollector() {
   // Limit the amount of time we attempt too submit information to the backend
   // too the flushInterval so data is always sent in the correct order and we
@@ -74,42 +80,52 @@ func startCollector() {
   // The timer that'll trigger our submission of aggregate data
   publishTimer := time.NewTicker(period)
 
+  // Main processing loop, the other threads are effectively evented and only
+  // push data too this loop.
   for {
     select {
-    case sig := <-signalChannel:
-      fmt.Printf("!! Caught signal %d... shutting down\n", sig)
-      publishAggregates(time.Now().Add(period))
-      return
-    case <-publishTimer.C:
-      publishAggregates(time.Now().Add(period))
-    case s := <-StatPipe:
-      // If we're tracking total received stats, initialize the counter if
-      // necessary and increment it for this interval.
-      if (receiveCounter != "") {
-        _, ok := counters[receiveCounter]
-        if (!ok) { counters[receiveCounter] = 0 }
-        counters[receiveCounter] += 1
-      }
+      // Handle various signals passed too us by the operating system, for the
+      // time being we handle all of the signals we're watching as a
+      // notification too exit.
+      case sig := <-signalChannel:
+        fmt.Printf("!! Caught signal %d... shutting down\n", sig)
+        publishAggregates(time.Now().Add(period))
+        return
+      // Whenever our timer fires it's time too dump our stats too graphite.
+      case <-publishTimer.C:
+        publishAggregates(time.Now().Add(period))
+      // If we haven't hit on the other two process any pending stats in our
+      // collection pipe.
+      case s := <-StatPipe:
+        // If we're tracking total received stats, initialize the counter if
+        // necessary and increment it for this interval.
+        if (receiveCounter != "") {
+          _, ok := counters[receiveCounter]
+          if (!ok) { counters[receiveCounter] = 0 }
+          counters[receiveCounter] += 1
+        }
 
-      if s.Modifier == "ms" {
-        // Handle timers
-        _, ok := timers[s.Bucket]
-        if !ok { timers[s.Bucket] = make(Int64Slice, 0) }
-        timers[s.Bucket] = append(timers[s.Bucket], s.Value.(int64))
-      } else if s.Modifier == "g" {
-        // Handle gauges
-        // TODO: Handle modifiers +/-
-        gauges[s.Bucket] = s.Value.(int64)
-      } else {
-        // Handle counter types
-        _, ok := counters[s.Bucket]
-        if (!ok) { counters[s.Bucket] = 0 }
-        counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1 / s.SampleRate))
-      }
+        if s.Type == "ms" {
+          // Handle timers
+          _, ok := timers[s.Bucket]
+          if !ok { timers[s.Bucket] = make(Int64Slice, 0) }
+          timers[s.Bucket] = append(timers[s.Bucket], s.Value.(int64))
+        } else if s.Type == "g" {
+          // Handle gauges
+          // TODO: Handle modifiers +/-
+          gauges[s.Bucket] = s.Value.(int64)
+        } else {
+          // Handle counter types
+          _, ok := counters[s.Bucket]
+          if (!ok) { counters[s.Bucket] = 0 }
+          counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1 / s.SampleRate))
+        }
     }
   }
 }
 
+// If there are any collected metrics since the last time this was called,
+// format them and attempt to send them too the configured graphite server.
 func publishAggregates(deadline time.Time) {
   var buffer bytes.Buffer
   var num int64
@@ -148,7 +164,9 @@ func publishAggregates(deadline time.Time) {
   return
 }
 
-// Process counters and rates of incoming counters
+// Process counters and rates of incoming counters, then add the results too
+// the buffer. This will return the total number of individual counter metrics
+// added too the buffer.
 func processCounters(buffer *bytes.Buffer, now int64) int64 {
   var num int64
 
@@ -265,7 +283,7 @@ func parseMessages(data []byte) []*StatSample {
     var err error
     var value interface{}
 
-    modifier := string(item[3])
+    metric_type := string(item[3])
 
     value, err = strconv.ParseInt(string(item[2]), 10, 64)
     if err != nil {
@@ -281,7 +299,7 @@ func parseMessages(data []byte) []*StatSample {
     stat := &StatSample{
       Bucket:     string(item[1]),
       Value:      value,
-      Modifier:   modifier,
+      Type:       metric_type,
       SampleRate: float32(sampleRate),
     }
 
@@ -346,14 +364,14 @@ var (
 // line arguments.
 func parseCLI() {
   flag.IntVar(&statCollectionPort, "port", 8125, "The UDP port too listen for metrics on.")
-  flag.StringVar(&listenAddress, "address", "::", "The address too bind the server too.")
+  flag.StringVar(&listenAddress, "address", "0.0.0.0", "The address too bind the server too.")
   flag.StringVar(&graphiteAddress, "graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
   flag.Int64Var(&flushInterval, "interval", 10, "Flush interval (seconds)")
   flag.BoolVar(&showVersion, "version", false, "Print version string and quit.")
   flag.StringVar(&receiveCounter, "receive-counter", "statsd.count", "Metric name for total metrics recevied per interval")
 
   percentileThresholds = Percentiles{50,90}
-  flag.Var(&percentileThresholds, "percentiles", "Percentile limits too calculate on timers (helps prevent long tails)")
+  flag.Var(&percentileThresholds, "percentiles", "Percentile limits calculated on timers. Multiple values can be passed as a comma separated list. If multiple instances are provided only the last one will be used.")
 
   flag.Parse()
 }

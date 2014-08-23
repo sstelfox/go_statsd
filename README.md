@@ -28,8 +28,13 @@ go get github.com/sstelfox/go_statsd
 * Add Sets data type
 * Global stat prefix
 * Full gauges support
+* Better test coverage
 
 # Change Log
+
+0.6.0:
+
+* More documentation
 
 0.5.5-alpha:
 
