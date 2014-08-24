@@ -26,7 +26,7 @@ const (
 type StatSample struct {
   Bucket     string
   Value      interface{}
-  Type       string
+  Modifier   string
   SampleRate float32
 }
 
@@ -105,12 +105,12 @@ func startCollector() {
           counters[receiveCounter] += 1
         }
 
-        if s.Type == "ms" {
+        if s.Modifier == "ms" {
           // Handle timers
           _, ok := timers[s.Bucket]
           if !ok { timers[s.Bucket] = make(Int64Slice, 0) }
           timers[s.Bucket] = append(timers[s.Bucket], s.Value.(int64))
-        } else if s.Type == "g" {
+        } else if s.Modifier == "g" {
           // Handle gauges
           // TODO: Handle modifiers +/-
           gauges[s.Bucket] = s.Value.(int64)
@@ -298,7 +298,7 @@ func parseMessages(data []byte) []*StatSample {
     stat := &StatSample{
       Bucket:     string(item[1]),
       Value:      value,
-      Type:       metric_type,
+      Modifier:       metric_type,
       SampleRate: float32(sampleRate),
     }
 
