@@ -288,7 +288,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 // TODO 'Gauges' can have a + or - sign at the beginning of their value
 // indicating that the current value should be modified rather than set too a
 // static value.
-var packetRegexp = regexp.MustCompile("^([^:]+):(-?[0-9]+)\\|(g|c|ms)(\\|@([0-9\\.]+))?\n?$")
+var packetRegexp = regexp.MustCompile("^([^:]+):(.+)\\|(c|g|s|ms)(\\|@([0-9\\.]+))?\n?$")
 
 // TODO: Handle gauge modifiers
 func parseMessages(data []byte) []*StatSample {
@@ -301,6 +301,7 @@ func parseMessages(data []byte) []*StatSample {
 
     item := packetRegexp.FindSubmatch(line)
     if len(item) == 0 {
+      fmt.Printf("Received invalid / unknown stat: %s\n", line)
       continue
     }
 
@@ -323,7 +324,7 @@ func parseMessages(data []byte) []*StatSample {
     stat := &StatSample{
       Bucket:     string(item[1]),
       Value:      value,
-      Modifier:       metric_type,
+      Modifier:   metric_type,
       SampleRate: float32(sampleRate),
     }
 
