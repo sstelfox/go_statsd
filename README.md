@@ -6,9 +6,10 @@ This will be a feature complete port (minus some of the backends) of
 
 Currently Supports:
 
-* Timing
 * Counters (With both raw values and rates)
 * Gauges (Does not support modifiers +/-)
+* Sets
+* Timers
 
 The logic around stat aggregation is currently closer to Bitly's implementation
 which is neither accurate, or compatible with the original statsd metrics. This
@@ -25,7 +26,6 @@ go get github.com/sstelfox/go_statsd
 * Implement network compatible version of statsd management interface
 * Make output statistics match the original Etsy implementation
 * Adjust internal logic around key names reflect the original implementation
-* Add Sets data type
 * Global stat prefix
 * Full gauges support
 * Better test coverage
@@ -35,6 +35,7 @@ go get github.com/sstelfox/go_statsd
 0.6.0:
 
 * More documentation
+* Added support for the Sets ('s') data type
 
 0.5.5-alpha:
 
