@@ -214,6 +214,8 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 func processSets(buffer *bytes.Buffer, now int64) int64 {
   var num int64
 
+  // TODO: If a set is empty, we should send a single count of 0 then delete
+  // the set entirely
   for metric, set := range sets {
     fmt.Fprintf(buffer, "%s.count %d %d\n", metric, len(set), now)
     delete(sets, metric)
