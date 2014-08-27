@@ -58,6 +58,11 @@ func (i *Percentiles) Set(value string) error {
   return nil
 }
 
+// A simple structure for tracking whether or not we've seen a value before or
+// not.
+type StringSet map[string]bool
+func (set StringSet) Add(s string) { set[s] = true }
+
 // Communication channels and global metric variables.
 var (
   StatPipe      = make(chan *StatSample, MAX_UNPROCESSED_PACKETS)
@@ -65,6 +70,7 @@ var (
 
   counters      = make(map[string]int64)
   gauges        = make(map[string]int64)
+  sets          = make(map[string]StringSet)
   timers        = make(map[string]Int64Slice)
 )
 
@@ -114,6 +120,10 @@ func startCollector() {
           // Handle gauges
           // TODO: Handle modifiers +/-
           gauges[s.Bucket] = s.Value.(int64)
+        } else if s.Modifier == "s" {
+          _, ok := sets[s.Bucket]
+          if !ok { sets[s.Bucket] = make(StringSet, 0) }
+          sets[s.Bucket].Add(s.Value.(string))
         } else {
           // Handle counter types
           _, ok := counters[s.Bucket]
@@ -134,6 +144,7 @@ func publishAggregates(deadline time.Time) {
 
   num += processCounters(&buffer, now)
   num += processGauges(&buffer, now)
+  num += processSets(&buffer, now)
   num += processTimers(&buffer, now, percentileThresholds)
 
   if num == 0 {
@@ -192,6 +203,20 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
   for metric, value := range gauges {
     fmt.Fprintf(buffer, "%s %d %d\n", metric, value, now)
     delete(gauges, metric)
+    num++
+  }
+
+  return num
+}
+
+// Go through and handle our sets data objects, collecting and resetting the
+// counts of the unique values we've seen.
+func processSets(buffer *bytes.Buffer, now int64) int64 {
+  var num int64
+
+  for metric, set := range sets {
+    fmt.Fprintf(buffer, "%s.count %d %d\n", metric, len(set), now)
+    delete(sets, metric)
     num++
   }
 
