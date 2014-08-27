@@ -310,10 +310,14 @@ func parseMessages(data []byte) []*StatSample {
 
     metric_type := string(item[3])
 
-    value, err = strconv.ParseInt(string(item[2]), 10, 64)
-    if err != nil {
-      fmt.Printf("Error: failed to ParseInt %s - %s\n", item[2], err)
-      continue
+    if metric_type == "s" {
+      value = string(item[2])
+    } else {
+      value, err = strconv.ParseInt(string(item[2]), 10, 64)
+      if err != nil {
+        fmt.Printf("Error: failed to ParseInt %s - %s\n", item[2], err)
+        continue
+      }
     }
 
     sampleRate, err := strconv.ParseFloat(string(item[5]), 32)
