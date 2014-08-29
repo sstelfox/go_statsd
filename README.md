@@ -36,6 +36,9 @@ go get github.com/sstelfox/go_statsd
 
 * More documentation
 * Added support for the Sets ('s') data type
+* While not configurable, the default metric namespace now matches the default
+  metrics namespaces of statsd (All stats are under the 'stats' namespace,
+  counters are under 'stats.counters', timers under 'stats.timers', and so on.
 
 0.5.5-alpha:
 
