@@ -217,3 +217,4 @@ func BenchmarkLotsOfTimers(t *testing.B) {
   t.ResetTimer()
   processTimers(&buff, time.Now().Unix(), commonPercentiles)
 }
+

@@ -184,8 +184,8 @@ func processCounters(buffer *bytes.Buffer, now int64) int64 {
   for metric, count := range counters {
     rate := (float64(count) / float64(flushInterval))
 
-    fmt.Fprintf(buffer, "%s.count %d %d\n", metric, count, now)
-    fmt.Fprintf(buffer, "%s.rate %f %d\n", metric, rate, now)
+    fmt.Fprintf(buffer, "stats.counters.%s.count %d %d\n", metric, count, now)
+    fmt.Fprintf(buffer, "stats.counters.%s.rate %f %d\n", metric, rate, now)
 
     delete(counters, metric)
     num += 2
@@ -201,7 +201,7 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
   var num int64
 
   for metric, value := range gauges {
-    fmt.Fprintf(buffer, "%s %d %d\n", metric, value, now)
+    fmt.Fprintf(buffer, "stats.gauges.%s %d %d\n", metric, value, now)
     delete(gauges, metric)
     num++
   }
@@ -217,7 +217,7 @@ func processSets(buffer *bytes.Buffer, now int64) int64 {
   // TODO: If a set is empty, we should send a single count of 0 then delete
   // the set entirely
   for metric, set := range sets {
-    fmt.Fprintf(buffer, "%s.count %d %d\n", metric, len(set), now)
+    fmt.Fprintf(buffer, "stats.sets.%s.count %d %d\n", metric, len(set), now)
     delete(sets, metric)
     num++
   }
@@ -248,10 +248,10 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
         var abs int
         if pct >= 0 {
           abs = pct
-          tmpl = "%s.upper_%d %d %d\n"
+          tmpl = "stats.timers.%s.upper_%d %d %d\n"
         } else {
           abs = 100 + pct
-          tmpl = "%s.lower_%d %d %d\n"
+          tmpl = "stats.timers.%s.lower_%d %d %d\n"
         }
 
         if len(times) > 1 {
@@ -275,10 +275,10 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 
       timers[key] = make(Int64Slice, 0)
 
-      fmt.Fprintf(buffer, "%s.mean %f %d\n", key, mean, now)
-      fmt.Fprintf(buffer, "%s.upper %d %d\n", key, max, now)
-      fmt.Fprintf(buffer, "%s.lower %d %d\n", key, min, now)
-      fmt.Fprintf(buffer, "%s.count %d %d\n", key, count, now)
+      fmt.Fprintf(buffer, "stats.timers.%s.mean %f %d\n", key, mean, now)
+      fmt.Fprintf(buffer, "stats.timers.%s.upper %d %d\n", key, max, now)
+      fmt.Fprintf(buffer, "stats.timers.%s.lower %d %d\n", key, min, now)
+      fmt.Fprintf(buffer, "stats.timers.%s.count %d %d\n", key, count, now)
 
       num += 4
     }
